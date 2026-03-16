@@ -1,0 +1,23 @@
+    # Bridge configuration
+    bridge_length=100
+    simulation_mode=carnage
+
+    # East → West traffic
+    east_arrival_mean=2.5
+    east_avg_speed=40
+    east_Ki=3
+    east_green_time=10
+    east_min_speed=30
+    east_max_speed=50
+    east_ambulance_percentage=10
+    east_speed_variation=5
+
+    # West → East traffic
+    west_arrival_mean=3.0
+    west_avg_speed=35
+    west_Ki=2
+    west_green_time=12
+    west_min_speed=25
+    west_max_speed=45
+    west_ambulance_percentage=30
+    west_speed_variation=5
