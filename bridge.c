@@ -152,6 +152,7 @@ void* traffic_light_run(void* arg)
 
         // esperar tiempo del semáforo
         sleep(green);
+        //commit
 
         pthread_mutex_lock(&bridge->mutex);
 
