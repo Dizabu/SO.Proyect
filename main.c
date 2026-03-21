@@ -36,12 +36,18 @@ int main() {
 
     bridge.mode = config.mode;
 
+    bridge.cars_passed_in_turn = 0;
+    bridge.east_Ki = config.east.Ki;
+    bridge.west_Ki = config.west.Ki;
+
     bridge.east_green_time = config.east.green_time;
     bridge.west_green_time = config.west.green_time;
 
     bridge.light_direction = EAST;
 
     printf("DEBUG: Simulation mode = %d\n", bridge.mode);
+    bridge.cars_passed_in_turn = 0;
+    bridge.current_turn_max = config.east.Ki;;
     printf("DEBUG: East green = %d | West green = %d\n",
            bridge.east_green_time, bridge.west_green_time);
 

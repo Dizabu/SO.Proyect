@@ -1,6 +1,6 @@
     # Bridge configuration
-    bridge_length=100
-    simulation_mode=carnage
+    bridge_length=25
+    simulation_mode=semaforos
 
     # East → West traffic
     east_arrival_mean=2.5

@@ -14,6 +14,10 @@ typedef struct Bridge {
     int waiting_ambulances_east;
     int waiting_ambulances_west;
 
+    // 👉 NECESARIO PARA POLICE
+    int waiting_cars_east;
+    int waiting_cars_west;
+
     pthread_mutex_t mutex;
     pthread_cond_t cond;
 
@@ -22,9 +26,20 @@ typedef struct Bridge {
 
     SimulationMode mode;
 
+    // -------- SEMAFOROS --------
     int light_direction;
     int east_green_time;
     int west_green_time;
+
+    // -------- VEHICULOS EN PUENTE --------
+    int vehicles_east;
+    int vehicles_west;
+
+    // -------- POLICE MODE --------
+    int cars_passed_in_turn;
+    int current_turn_max;   // Ki actual
+    int east_Ki;
+    int west_Ki;
 
 } Bridge;
 

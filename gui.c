@@ -55,6 +55,36 @@ void draw_traffic_lights(Bridge* bridge)
     }
 }
 
+/* -------- DIBUJAR POLICIAS -------- */
+
+void draw_police(Bridge* bridge)
+{
+    int police_size = 20;
+
+    int west_x = 50;
+    int east_x = 100 + bridge->length * 10 + 20;
+    int y = 185;
+
+    SDL_Rect police_west = {west_x, y, police_size, police_size};
+    SDL_Rect police_east = {east_x, y, police_size, police_size};
+
+    // -------- WEST --------
+    if (bridge->light_direction == WEST)
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // 🟡 activo
+    else
+        SDL_SetRenderDrawColor(renderer, 120, 120, 120, 255); // ⚪ inactivo
+
+    SDL_RenderFillRect(renderer, &police_west);
+
+    // -------- EAST --------
+    if (bridge->light_direction == EAST)
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // 🟡 activo
+    else
+        SDL_SetRenderDrawColor(renderer, 120, 120, 120, 255); // ⚪ inactivo
+
+    SDL_RenderFillRect(renderer, &police_east);
+}
+
 /* -------- RENDER -------- */
 
 void gui_render(Bridge* bridge)
@@ -72,12 +102,25 @@ void gui_render(Bridge* bridge)
     {
         int x = start_x + i * segment_width;
 
-        // carretera
+        // -------- carretera --------
         SDL_Rect road = {x, 180, segment_width - 1, 40};
 
-        SDL_SetRenderDrawColor(renderer, 70, 70, 70, 255);
+        // 🔥 COLOR DINÁMICO DEL PUENTE
+        if (bridge->mode == MODE_POLICE)
+        {
+            if (bridge->light_direction == EAST)
+                SDL_SetRenderDrawColor(renderer, 40, 40, 80, 255); // azul tenue
+            else
+                SDL_SetRenderDrawColor(renderer, 80, 40, 40, 255); // rojo tenue
+        }
+        else
+        {
+            SDL_SetRenderDrawColor(renderer, 70, 70, 70, 255); // normal
+        }
+
         SDL_RenderFillRect(renderer, &road);
 
+        // -------- vehículos --------
         Vehicle* v = bridge->segment_vehicles[i];
 
         if (v != NULL)
@@ -90,11 +133,11 @@ void gui_render(Bridge* bridge)
                 y = lane_east_y;
 
             if (v->type == VEHICLE_AMBULANCE)
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // ambulancia
             else if (v->dir == WEST)
-                SDL_SetRenderDrawColor(renderer, 255, 140, 0, 255);
+                SDL_SetRenderDrawColor(renderer, 255, 140, 0, 255); // oeste → este
             else
-                SDL_SetRenderDrawColor(renderer, 0, 120, 255, 255);
+                SDL_SetRenderDrawColor(renderer, 0, 120, 255, 255); // este → oeste
 
             SDL_Rect car = {x, y, segment_width - 2, 12};
 
@@ -102,11 +145,15 @@ void gui_render(Bridge* bridge)
         }
     }
 
-    /* -------- SEMAFOROS SOLO SI EL MODO LO USA -------- */
+    /* -------- INDICADORES DE MODO -------- */
 
     if (bridge->mode == MODE_SEMAFOROS)
     {
         draw_traffic_lights(bridge);
+    }
+    else if (bridge->mode == MODE_POLICE)
+    {
+        draw_police(bridge);
     }
 
     SDL_RenderPresent(renderer);

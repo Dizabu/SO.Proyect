@@ -26,4 +26,6 @@ typedef struct Vehicle {
 
 } Vehicle;
 
+void start_vehicle_thread(Vehicle* v);
+
 #endif
