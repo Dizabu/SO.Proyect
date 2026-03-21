@@ -8,6 +8,18 @@
 #include "config.h"
 #include "gui.h"
 
+// Estructura para pasar múltiples argumentos al thread de la GUI
+typedef struct {
+    Bridge* bridge;
+    Config* config;
+} GuiThreadArgs;
+
+// Función wrapper para el thread de la GUI
+void* gui_thread_wrapper(void* arg) {
+    GuiThreadArgs* args = (GuiThreadArgs*)arg;
+    return gui_run(args->bridge, args->config);
+}
+
 int main() {
 
     printf("DEBUG: Starting simulation\n");
@@ -47,7 +59,7 @@ int main() {
 
     printf("DEBUG: Simulation mode = %d\n", bridge.mode);
     bridge.cars_passed_in_turn = 0;
-    bridge.current_turn_max = config.east.Ki;;
+    bridge.current_turn_max = config.east.Ki;
     printf("DEBUG: East green = %d | West green = %d\n",
            bridge.east_green_time, bridge.west_green_time);
 
@@ -62,15 +74,20 @@ int main() {
     }
 
 
-    // -------- INICIAR GUI --------
+    // -------- INICIAR GUI con wrapper para pasar config --------
     pthread_t gui_thread;
 
-    if (pthread_create(&gui_thread, NULL, gui_run, &bridge) != 0) {
+    // Preparar argumentos para la GUI
+    GuiThreadArgs gui_args;
+    gui_args.bridge = &bridge;
+    gui_args.config = &config;
+
+    if (pthread_create(&gui_thread, NULL, gui_thread_wrapper, &gui_args) != 0) {
         printf("ERROR: Could not start GUI thread\n");
         return 1;
     }
 
-    printf("DEBUG: GUI started\n");
+    printf("DEBUG: GUI started with configuration\n");
 
 
     // -------- Generadores de tráfico --------
@@ -98,10 +115,10 @@ int main() {
     pthread_join(east_thread, NULL);
     pthread_join(west_thread, NULL);
 
+    printf("DEBUG: Generators finished\n");
 
     // Esperar que el usuario cierre la GUI
     pthread_join(gui_thread, NULL);
-
 
     printf("DEBUG: Simulation finished\n");
 

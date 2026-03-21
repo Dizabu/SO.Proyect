@@ -4,6 +4,12 @@ project(untitled C)
 set(CMAKE_C_STANDARD 11)
 
 find_package(SDL2 REQUIRED)
+find_package(SDL2_ttf REQUIRED)
+
+include_directories(
+        ${SDL2_INCLUDE_DIRS}
+        ${SDL2_TTF_INCLUDE_DIRS}
+)
 
 add_executable(untitled
         main.c
@@ -15,7 +21,8 @@ add_executable(untitled
 )
 
 target_link_libraries(untitled
-        SDL2
+        ${SDL2_LIBRARIES}
+        SDL2_ttf
         pthread
         m
 )
