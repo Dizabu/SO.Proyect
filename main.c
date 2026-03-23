@@ -8,13 +8,13 @@
 #include "config.h"
 #include "gui.h"
 
-// Estructura para pasar múltiples argumentos al thread de la GUI
+
 typedef struct {
     Bridge* bridge;
     Config* config;
 } GuiThreadArgs;
 
-// Función wrapper para el thread de la GUI
+
 void* gui_thread_wrapper(void* arg) {
     GuiThreadArgs* args = (GuiThreadArgs*)arg;
     return gui_run(args->bridge, args->config);
@@ -28,7 +28,7 @@ int main() {
     printf("DEBUG: Random seed initialized\n");
 
 
-    // -------- Cargar configuración --------
+
     Config config;
 
     if (load_config("config.txt", &config) != 0) {
@@ -39,7 +39,7 @@ int main() {
     printf("DEBUG: Configuration loaded\n");
 
 
-    // -------- Inicializar puente --------
+
     Bridge bridge;
 
     bridge_init(&bridge, config.bridge_length);
@@ -64,20 +64,27 @@ int main() {
            bridge.east_green_time, bridge.west_green_time);
 
 
-    // -------- INICIAR SEMAFORO --------
+
     pthread_t light_thread;
 
-    if (bridge.mode == MODE_SEMAFOROS)
-    {
-        pthread_create(&light_thread, NULL, traffic_light_run, &bridge);
-        printf("DEBUG: Traffic light thread started\n");
+    if (bridge.mode == MODE_SEMAFOROS) {
+        // Crear hilos independientes para cada semáforo
+        pthread_t east_light_thread;
+        pthread_t west_light_thread;
+
+        pthread_create(&east_light_thread, NULL, traffic_light_east_run, &bridge);
+        pthread_create(&west_light_thread, NULL, traffic_light_west_run, &bridge);
+
+        printf("DEBUG: Independent traffic lights started (EAST and WEST)\n");
+        printf("   EAST green time: %d seconds\n", bridge.east_green_time);
+        printf("   WEST green time: %d seconds\n", bridge.west_green_time);
     }
 
 
-    // -------- INICIAR GUI con wrapper para pasar config --------
+
     pthread_t gui_thread;
 
-    // Preparar argumentos para la GUI
+
     GuiThreadArgs gui_args;
     gui_args.bridge = &bridge;
     gui_args.config = &config;
@@ -90,7 +97,7 @@ int main() {
     printf("DEBUG: GUI started with configuration\n");
 
 
-    // -------- Generadores de tráfico --------
+
     GeneratorArgs east_args;
     east_args.dir = EAST;
     east_args.bridge = &bridge;
@@ -111,13 +118,11 @@ int main() {
     printf("DEBUG: Both generators are now running\n");
 
 
-    // Esperar generadores
     pthread_join(east_thread, NULL);
     pthread_join(west_thread, NULL);
 
     printf("DEBUG: Generators finished\n");
 
-    // Esperar que el usuario cierre la GUI
     pthread_join(gui_thread, NULL);
 
     printf("DEBUG: Simulation finished\n");

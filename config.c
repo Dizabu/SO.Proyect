@@ -14,29 +14,25 @@ int load_config(const char* filename, Config* cfg) {
 
     char line[256];
     while (fgets(line, sizeof(line), f)) {
-        // Skip comments and empty lines
+
         char* trimmed = line;
         while (isspace(*trimmed)) trimmed++;
         if (*trimmed == '#' || *trimmed == '\0' || *trimmed == '\n')
             continue;
 
-        // Find '=' separator
         char* equal_sign = strchr(trimmed, '=');
         if (!equal_sign) continue;
 
-        // Split key and value
         *equal_sign = '\0';
         char* key = trimmed;
         char* value = equal_sign + 1;
 
-        // Trim trailing spaces from key
         char* end = key + strlen(key) - 1;
         while (end > key && isspace(*end)) {
             *end = '\0';
             end--;
         }
 
-        // Trim trailing spaces and newline from value
         end = value + strlen(value) - 1;
         while (end > value && (isspace(*end) || *end == '\n')) {
             *end = '\0';
@@ -47,7 +43,7 @@ int load_config(const char* filename, Config* cfg) {
             cfg->bridge_length = atoi(value);
         }
         else if (strcmp(key, "simulation_mode") == 0) {
-            if (strcmp(value, "semaforos") == 0)
+            if (strcmp(value, "tlights") == 0)
                 cfg->mode = MODE_SEMAFOROS;
             else if (strcmp(value, "police") == 0)
                 cfg->mode = MODE_POLICE;
@@ -93,7 +89,6 @@ int load_config(const char* filename, Config* cfg) {
         else if (strcmp(key, "west_speed_variation") == 0)
             cfg->west.speed_variation = atoi(value);
 
-        // Ignore unknown keys silently
     }
 
     fclose(f);

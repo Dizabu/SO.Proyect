@@ -1,7 +1,7 @@
 #ifndef VEHICLE_H
 #define VEHICLE_H
 
-typedef struct Bridge Bridge;   // forward declaration
+typedef struct Bridge Bridge;
 
 typedef enum {
     EAST,

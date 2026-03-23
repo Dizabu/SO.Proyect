@@ -10,7 +10,7 @@ static void* vehicle_run(void* arg) {
 
     bridge_enter(v->bridge, v);
 
-    // tiempo por metro
+
     double time_per_meter = 3.6 / v->speed_kmh;
 
     int last_segment = (v->dir == EAST) ? v->bridge->length - 1 : 0;
@@ -21,19 +21,15 @@ static void* vehicle_run(void* arg) {
         int old_segment = v->current_segment;
         int next_segment = old_segment + step;
 
-        // bloquear el siguiente segmento
+
         pthread_mutex_lock(&v->bridge->segment_mutexes[next_segment]);
 
-        // simular tiempo de movimiento
         usleep(time_per_meter * 1000000);
 
-        // liberar el segmento anterior
         pthread_mutex_unlock(&v->bridge->segment_mutexes[old_segment]);
 
-        // actualizar posición
         v->current_segment = next_segment;
 
-        // actualizar mapa de vehículos del puente (para la GUI)
         pthread_mutex_lock(&v->bridge->mutex);
 
         v->bridge->segment_vehicles[next_segment] = v;
@@ -44,7 +40,6 @@ static void* vehicle_run(void* arg) {
         printf("Vehicle %d moved to segment %d\n", v->id, v->current_segment);
     }
 
-    // último metro antes de salir
     usleep(time_per_meter * 1000000);
 
     bridge_leave(v->bridge, v);

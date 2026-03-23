@@ -1,6 +1,6 @@
     # Bridge configuration
     bridge_length=25
-    simulation_mode=semaforos
+    simulation_mode=tlights
 
     # East → West traffic
     east_arrival_mean=2.5
@@ -19,5 +19,5 @@
     west_green_time=12
     west_min_speed=25
     west_max_speed=45
-    west_ambulance_percentage=30
+    west_ambulance_percentage=100
     west_speed_variation=5
