@@ -44,7 +44,6 @@ void* traffic_generator(void* arg) {
                dir == EAST ? "EAST" : "WEST",
                v->type == VEHICLE_AMBULANCE ? "AMBULANCE" : "CAR",
                v->speed_kmh);
-
         start_vehicle_thread(v);
 
         double wait = exponential(cfg->arrival_mean);

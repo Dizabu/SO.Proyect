@@ -38,8 +38,6 @@ void gui_init()
         printf("ERROR: Some fonts not loaded\n");
 }
 
-
-
 void draw_text_with_font(TTF_Font* font, const char* text, int x, int y, SDL_Color color)
 {
     if (!font) return;
@@ -72,7 +70,6 @@ void draw_title(const char* text, int x, int y)
     draw_text_with_font(font_title, text, x, y, color);
 }
 
-
 void draw_statistics_panel(Bridge* bridge, Config* config)
 {
     int panel_x = 20;
@@ -82,7 +79,7 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
 
     // Panel background
     SDL_SetRenderDrawColor(renderer, 40, 40, 50, 200);
-    SDL_Rect panel = {panel_x - 10, panel_y - 10, 280, 340};
+    SDL_Rect panel = {panel_x - 10, panel_y - 10, 280, 380};
     SDL_RenderFillRect(renderer, &panel);
 
     // Title
@@ -108,7 +105,7 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
     draw_text_colored(mode_text, panel_x, panel_y + y_offset, mode_color);
     y_offset += line_height;
 
-    // Para modo SEMAFOROS, mostrar estado de los semáforos independientes
+    // Modo SEMAFOROS - información específica
     if (bridge->mode == MODE_SEMAFOROS) {
         int west_green = 0, east_green = 0;
 
@@ -141,21 +138,61 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
         y_offset += line_height;
     }
 
-    // Para modo POLICE, mostrar información del turno
+    // Modo POLICE - información específica
     if (bridge->mode == MODE_POLICE) {
-        char turn_text[100];
-        sprintf(turn_text, "Current Turn: %s",
-                bridge->light_direction == EAST ? "EAST →" : "WEST ←");
-        draw_text(turn_text, panel_x, panel_y + y_offset);
+        char police_east_text[100];
+        if (bridge->police_east_active) {
+            sprintf(police_east_text, "POLICE EAST: 🟢 ACTIVE (%d/%d)",
+                    bridge->police_east_vehicles_passed, bridge->east_Ki);
+            draw_text_colored(police_east_text, panel_x, panel_y + y_offset, (SDL_Color){0, 255, 0, 255});
+        } else {
+            sprintf(police_east_text, "POLICE EAST: 🔴 INACTIVE");
+            draw_text_colored(police_east_text, panel_x, panel_y + y_offset, (SDL_Color){255, 0, 0, 255});
+        }
         y_offset += line_height;
 
-        char progress_text[100];
-        sprintf(progress_text, "Progress: %d / %d",
-                bridge->cars_passed_in_turn, bridge->current_turn_max);
-        draw_text(progress_text, panel_x, panel_y + y_offset);
+        char police_west_text[100];
+        if (bridge->police_west_active) {
+            sprintf(police_west_text, "POLICE WEST: 🟢 ACTIVE (%d/%d)",
+                    bridge->police_west_vehicles_passed, bridge->west_Ki);
+            draw_text_colored(police_west_text, panel_x, panel_y + y_offset, (SDL_Color){0, 255, 0, 255});
+        } else {
+            sprintf(police_west_text, "POLICE WEST: 🔴 INACTIVE");
+            draw_text_colored(police_west_text, panel_x, panel_y + y_offset, (SDL_Color){255, 0, 0, 255});
+        }
+        y_offset += line_height;
+
+        time_t now = time(NULL);
+        int tiempo_east_sin_pasar = now - bridge->last_east_pass_time;
+        int tiempo_west_sin_pasar = now - bridge->last_west_pass_time;
+
+        char timeout_text[100];
+        sprintf(timeout_text, "Timeout: EAST:%ds | WEST:%ds", tiempo_east_sin_pasar, tiempo_west_sin_pasar);
+        draw_text(timeout_text, panel_x, panel_y + y_offset);
+        y_offset += line_height;
+
+        char amb_text[100];
+        sprintf(amb_text, "Ambulances: EAST:%d | WEST:%d",
+                bridge->waiting_ambulances_east, bridge->waiting_ambulances_west);
+        draw_text(amb_text, panel_x, panel_y + y_offset);
         y_offset += line_height;
     }
 
+    // Modo CARNAGE - información específica
+    if (bridge->mode == MODE_CARNAGE) {
+        char direction_text[100];
+        if (bridge->current_direction == EAST) {
+            sprintf(direction_text, "Direction: EAST → WEST");
+        } else if (bridge->current_direction == WEST) {
+            sprintf(direction_text, "Direction: WEST → EAST");
+        } else {
+            sprintf(direction_text, "Direction: NONE");
+        }
+        draw_text(direction_text, panel_x, panel_y + y_offset);
+        y_offset += line_height;
+    }
+
+    // Información común a todos los modos
     char on_bridge[100];
     sprintf(on_bridge, "Vehicles on Bridge: %d", bridge->vehicles_on_bridge);
     draw_text(on_bridge, panel_x, panel_y + y_offset);
@@ -173,13 +210,11 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
     draw_text_colored(west_wait, panel_x, panel_y + y_offset, west_color);
     y_offset += line_height;
 
-    // ========== CORREGIDO: Usar arrival_mean en lugar de vehicles_per_minute ==========
     y_offset += 5;
     draw_text("--- Arrival Rates ---", panel_x, panel_y + y_offset);
     y_offset += line_height;
 
     char east_rate[100];
-    // Calcular vehículos por minuto a partir de arrival_mean (segundos)
     double east_veh_per_min = 60.0 / config->east.arrival_mean;
     sprintf(east_rate, "EAST: %.1f veh/min (%.1f sec)", east_veh_per_min, config->east.arrival_mean);
     draw_text(east_rate, panel_x, panel_y + y_offset);
@@ -191,7 +226,6 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
     draw_text(west_rate, panel_x, panel_y + y_offset);
     y_offset += line_height;
 
-    // Mostrar porcentaje de ambulancias
     y_offset += 5;
     draw_text("--- Vehicle Types ---", panel_x, panel_y + y_offset);
     y_offset += line_height;
@@ -220,8 +254,6 @@ void draw_statistics_panel(Bridge* bridge, Config* config)
     draw_text(west_ki, panel_x, panel_y + y_offset);
 }
 
-
-
 void draw_waiting_queues(Bridge* bridge)
 {
     int queue_start_x = 80;
@@ -230,7 +262,6 @@ void draw_waiting_queues(Bridge* bridge)
     int vehicle_width = 20;
     int vehicle_height = 15;
     int spacing = 5;
-
 
     for (int i = 0; i < bridge->vehicles_east && i < 15; i++) {
         int x = queue_start_x + i * (vehicle_width + spacing);
@@ -260,50 +291,205 @@ void draw_waiting_queues(Bridge* bridge)
     draw_text_colored("WEST ← WAITING QUEUE:", 80, 385, (SDL_Color){255, 150, 100, 255});
 }
 
-
 void draw_police_ui(Bridge* bridge)
 {
     int police_x = 1100;
-    int police_y = 300;
-    int size = 40;
+    int police_y = 250;
+    int size = 60;
 
-    draw_title("POLICE CONTROL", police_x - 40, police_y - 50);
+    draw_title("POLICE CONTROL", police_x - 20, police_y - 60);
 
-    SDL_Rect west_police = {police_x, police_y, size, size};
-    if (bridge->light_direction == WEST)
-        SDL_SetRenderDrawColor(renderer, 255, 100, 0, 255);
-    else
+    // Policía EAST
+    SDL_Rect east_police = {police_x, police_y, size, size};
+    if (bridge->police_east_active) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_RenderFillRect(renderer, &east_police);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
+        for (int i = 0; i < 3; i++) {
+            SDL_Rect glow = {police_x - i, police_y - i, size + i*2, size + i*2};
+            SDL_RenderDrawRect(renderer, &glow);
+        }
+    } else {
         SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-    SDL_RenderFillRect(renderer, &west_police);
-    draw_text("WEST", police_x + 10, police_y + 15);
+        SDL_RenderFillRect(renderer, &east_police);
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &east_police);
 
-    SDL_Rect east_police = {police_x + size + 20, police_y, size, size};
-    if (bridge->light_direction == EAST)
-        SDL_SetRenderDrawColor(renderer, 255, 100, 0, 255);
-    else
+    draw_text("👮", police_x + 22, police_y + 15);
+    draw_text("EAST", police_x + 18, police_y + 40);
+
+    char east_progress[50];
+    sprintf(east_progress, "%d/%d", bridge->police_east_vehicles_passed, bridge->east_Ki);
+    draw_text(east_progress, police_x + 22, police_y + 55);
+
+    // Policía WEST
+    SDL_Rect west_police = {police_x + size + 30, police_y, size, size};
+    if (bridge->police_west_active) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_RenderFillRect(renderer, &west_police);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
+        for (int i = 0; i < 3; i++) {
+            SDL_Rect glow = {police_x + size + 30 - i, police_y - i, size + i*2, size + i*2};
+            SDL_RenderDrawRect(renderer, &glow);
+        }
+    } else {
         SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-    SDL_RenderFillRect(renderer, &east_police);
-    draw_text("EAST", police_x + size + 30, police_y + 15);
+        SDL_RenderFillRect(renderer, &west_police);
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &west_police);
+
+    draw_text("👮", police_x + size + 30 + 22, police_y + 15);
+    draw_text("WEST", police_x + size + 30 + 18, police_y + 40);
+
+    char west_progress[50];
+    sprintf(west_progress, "%d/%d", bridge->police_west_vehicles_passed, bridge->west_Ki);
+    draw_text(west_progress, police_x + size + 30 + 22, police_y + 55);
+
+    // Timeout bars
+    time_t now = time(NULL);
+    int tiempo_east_sin_pasar = now - bridge->last_east_pass_time;
+    int tiempo_west_sin_pasar = now - bridge->last_west_pass_time;
 
     int bar_width = 200;
-    int filled = 0;
-    if (bridge->current_turn_max > 0)
-        filled = (bridge->cars_passed_in_turn * bar_width) / bridge->current_turn_max;
+    int bar_x = police_x - 20;
+    int bar_y = police_y + size + 20;
 
-    SDL_Rect bar_bg = {police_x - 20, police_y + size + 20, bar_width, 20};
-    SDL_Rect bar_fill = {police_x - 20, police_y + size + 20, filled, 20};
+    char east_timeout_text[50];
+    sprintf(east_timeout_text, "EAST timeout: %ds", tiempo_east_sin_pasar);
+    draw_text(east_timeout_text, bar_x, bar_y - 15);
+
+    int filled_east = (tiempo_east_sin_pasar * bar_width) / 10;
+    if (filled_east > bar_width) filled_east = bar_width;
+    SDL_Rect bar_bg_east = {bar_x, bar_y, bar_width, 15};
+    SDL_Rect bar_fill_east = {bar_x, bar_y, filled_east, 15};
 
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-    SDL_RenderFillRect(renderer, &bar_bg);
+    SDL_RenderFillRect(renderer, &bar_bg_east);
 
-    SDL_SetRenderDrawColor(renderer, 255, 200, 0, 255);
-    SDL_RenderFillRect(renderer, &bar_fill);
+    if (tiempo_east_sin_pasar >= 10) {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 200, 0, 255);
+    }
+    SDL_RenderFillRect(renderer, &bar_fill_east);
 
-    char progress_text[50];
-    sprintf(progress_text, "Progress: %d%%", (filled * 100) / bar_width);
-    draw_text(progress_text, police_x - 20, police_y + size + 45);
+    int bar_y_west = bar_y + 25;
+    char west_timeout_text[50];
+    sprintf(west_timeout_text, "WEST timeout: %ds", tiempo_west_sin_pasar);
+    draw_text(west_timeout_text, bar_x, bar_y_west - 15);
+
+    int filled_west = (tiempo_west_sin_pasar * bar_width) / 10;
+    if (filled_west > bar_width) filled_west = bar_width;
+    SDL_Rect bar_bg_west = {bar_x, bar_y_west, bar_width, 15};
+    SDL_Rect bar_fill_west = {bar_x, bar_y_west, filled_west, 15};
+
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+    SDL_RenderFillRect(renderer, &bar_bg_west);
+
+    if (tiempo_west_sin_pasar >= 10) {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 200, 0, 255);
+    }
+    SDL_RenderFillRect(renderer, &bar_fill_west);
 }
 
+void draw_traffic_lights_ui(Bridge* bridge)
+{
+    int lights_x = 1100;
+    int lights_y = 250;
+    int size = 60;
+
+    draw_title("TRAFFIC LIGHTS", lights_x - 20, lights_y - 60);
+
+    // Semáforo EAST
+    SDL_Rect east_light = {lights_x, lights_y, size, size};
+    int east_green = 0;
+    pthread_mutex_lock(&bridge->east_light_mutex);
+    east_green = bridge->east_light_state;
+    pthread_mutex_unlock(&bridge->east_light_mutex);
+
+    if (east_green) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_RenderFillRect(renderer, &east_light);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
+        for (int i = 0; i < 3; i++) {
+            SDL_Rect glow = {lights_x - i, lights_y - i, size + i*2, size + i*2};
+            SDL_RenderDrawRect(renderer, &glow);
+        }
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &east_light);
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &east_light);
+
+    draw_text("🚦", lights_x + 22, lights_y + 15);
+    draw_text("EAST", lights_x + 18, lights_y + 40);
+    char east_time[50];
+    sprintf(east_time, "%ds", bridge->east_green_time);
+    draw_text(east_time, lights_x + 22, lights_y + 55);
+
+    // Semáforo WEST
+    SDL_Rect west_light = {lights_x + size + 30, lights_y, size, size};
+    int west_green = 0;
+    pthread_mutex_lock(&bridge->west_light_mutex);
+    west_green = bridge->west_light_state;
+    pthread_mutex_unlock(&bridge->west_light_mutex);
+
+    if (west_green) {
+        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+        SDL_RenderFillRect(renderer, &west_light);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
+        for (int i = 0; i < 3; i++) {
+            SDL_Rect glow = {lights_x + size + 30 - i, lights_y - i, size + i*2, size + i*2};
+            SDL_RenderDrawRect(renderer, &glow);
+        }
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &west_light);
+    }
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &west_light);
+
+    draw_text("🚦", lights_x + size + 30 + 22, lights_y + 15);
+    draw_text("WEST", lights_x + size + 30 + 18, lights_y + 40);
+    char west_time[50];
+    sprintf(west_time, "%ds", bridge->west_green_time);
+    draw_text(west_time, lights_x + size + 30 + 22, lights_y + 55);
+}
+
+void draw_carnage_ui(Bridge* bridge)
+{
+    int carnage_x = 1100;
+    int carnage_y = 250;
+    int size = 60;
+
+    draw_title("CARNAGE MODE", carnage_x - 20, carnage_y - 60);
+
+    // Mostrar dirección actual
+    SDL_Rect direction_box = {carnage_x, carnage_y, size * 2 + 30, size};
+    SDL_SetRenderDrawColor(renderer, 80, 80, 100, 255);
+    SDL_RenderFillRect(renderer, &direction_box);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &direction_box);
+
+    char dir_text[50];
+    if (bridge->current_direction == EAST) {
+        sprintf(dir_text, "EAST → WEST");
+        draw_text_colored(dir_text, carnage_x + 40, carnage_y + 25, (SDL_Color){0, 255, 0, 255});
+    } else if (bridge->current_direction == WEST) {
+        sprintf(dir_text, "WEST → EAST");
+        draw_text_colored(dir_text, carnage_x + 40, carnage_y + 25, (SDL_Color){0, 255, 0, 255});
+    } else {
+        sprintf(dir_text, "WAITING");
+        draw_text_colored(dir_text, carnage_x + 55, carnage_y + 25, (SDL_Color){255, 255, 0, 255});
+    }
+
+    draw_text("One direction at a time", carnage_x, carnage_y + size + 20);
+}
 
 void draw_bridge(Bridge* bridge)
 {
@@ -317,38 +503,74 @@ void draw_bridge(Bridge* bridge)
                           bridge->length * segment_width + 20, lane_height * 2 + 20};
     SDL_RenderFillRect(renderer, &bridge_bg);
 
-
     for (int i = 0; i < bridge->length; i++) {
         int x = start_x + i * segment_width;
 
-
         SDL_Rect west_lane = {x, bridge_y, segment_width - 1, lane_height};
-
         SDL_Rect east_lane = {x, bridge_y + lane_height, segment_width - 1, lane_height};
 
+        // Colores según el modo
         if (bridge->mode == MODE_POLICE) {
-            if (bridge->light_direction == EAST) {
-                SDL_SetRenderDrawColor(renderer, 60, 60, 100, 255);
+            if (bridge->police_east_active) {
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
                 SDL_RenderFillRect(renderer, &west_lane);
-                SDL_SetRenderDrawColor(renderer, 100, 100, 150, 255);
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            } else if (bridge->police_west_active) {
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
                 SDL_RenderFillRect(renderer, &east_lane);
             } else {
-                SDL_SetRenderDrawColor(renderer, 100, 100, 150, 255);
+                SDL_SetRenderDrawColor(renderer, 100, 70, 70, 255);
                 SDL_RenderFillRect(renderer, &west_lane);
-                SDL_SetRenderDrawColor(renderer, 60, 60, 100, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            }
+        } else if (bridge->mode == MODE_SEMAFOROS) {
+            int east_green = 0, west_green = 0;
+            pthread_mutex_lock(&bridge->east_light_mutex);
+            east_green = bridge->east_light_state;
+            pthread_mutex_unlock(&bridge->east_light_mutex);
+            pthread_mutex_lock(&bridge->west_light_mutex);
+            west_green = bridge->west_light_state;
+            pthread_mutex_unlock(&bridge->west_light_mutex);
+
+            if (west_green) {
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            } else if (east_green) {
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 100, 70, 70, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
                 SDL_RenderFillRect(renderer, &east_lane);
             }
         } else {
-            SDL_SetRenderDrawColor(renderer, 80, 80, 100, 255);
-            SDL_RenderFillRect(renderer, &west_lane);
-            SDL_RenderFillRect(renderer, &east_lane);
+            if (bridge->current_direction == EAST) {
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            } else if (bridge->current_direction == WEST) {
+                SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
+                SDL_RenderFillRect(renderer, &east_lane);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 100, 70, 70, 255);
+                SDL_RenderFillRect(renderer, &west_lane);
+                SDL_RenderFillRect(renderer, &east_lane);
+            }
         }
-
 
         SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
         SDL_RenderDrawLine(renderer, x, bridge_y + lane_height,
                           x + segment_width, bridge_y + lane_height);
-
 
         Vehicle* v = bridge->segment_vehicles[i];
         if (v != NULL) {
@@ -364,7 +586,6 @@ void draw_bridge(Bridge* bridge)
             SDL_Rect car = {x + 1, y + 2, segment_width - 3, lane_height - 4};
             SDL_RenderFillRect(renderer, &car);
 
-
             if (v->type == VEHICLE_AMBULANCE) {
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
                 SDL_RenderDrawLine(renderer, x + segment_width/2, y + 5,
@@ -375,26 +596,65 @@ void draw_bridge(Bridge* bridge)
         }
     }
 
+    draw_text_colored("<- WESTBOUND (to EAST)", start_x - 100, bridge_y + 5, (SDL_Color){255, 140, 0, 255});
+    draw_text_colored("EASTBOUND (to WEST) ->", start_x - 100, bridge_y + lane_height + 5, (SDL_Color){0, 150, 255, 255});
 
-    draw_text_colored("<- WESTBOUND", start_x - 100, bridge_y + 5, (SDL_Color){255, 140, 0, 255});
-    draw_text_colored("EASTBOUND ->", start_x - 100, bridge_y + lane_height + 5, (SDL_Color){0, 150, 255, 255});
-
-
+    // Texto indicador de dirección permitida
+    char dir_text[150];
     if (bridge->mode == MODE_POLICE) {
-        char dir_text[50];
-        if (bridge->light_direction == EAST) {
-            sprintf(dir_text, ">>>>> EASTBOUND ALLOWED >>>>>");
-            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 100,
+        if (bridge->police_east_active) {
+            sprintf(dir_text, ">>>>> POLICE EAST: WEST → EAST ALLOWED (%d/%d) >>>>>",
+                    bridge->police_east_vehicles_passed, bridge->east_Ki);
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){0, 255, 0, 255});
+        } else if (bridge->police_west_active) {
+            sprintf(dir_text, "<<<<< POLICE WEST: EAST → WEST ALLOWED (%d/%d) <<<<<",
+                    bridge->police_west_vehicles_passed, bridge->west_Ki);
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
                             bridge_y - 30, (SDL_Color){0, 255, 0, 255});
         } else {
-            sprintf(dir_text, "<<<<< WESTBOUND ALLOWED <<<<<");
-            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 100,
+            sprintf(dir_text, "⚠️ NO POLICE ACTIVE - Switching turn... ⚠️");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){255, 255, 0, 255});
+        }
+    } else if (bridge->mode == MODE_SEMAFOROS) {
+        int east_green = 0, west_green = 0;
+        pthread_mutex_lock(&bridge->east_light_mutex);
+        east_green = bridge->east_light_state;
+        pthread_mutex_unlock(&bridge->east_light_mutex);
+        pthread_mutex_lock(&bridge->west_light_mutex);
+        west_green = bridge->west_light_state;
+        pthread_mutex_unlock(&bridge->west_light_mutex);
+
+        if (west_green) {
+            sprintf(dir_text, ">>>>> WEST LIGHT: GREEN for WEST → EAST >>>>>");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
                             bridge_y - 30, (SDL_Color){0, 255, 0, 255});
+        } else if (east_green) {
+            sprintf(dir_text, "<<<<< EAST LIGHT: GREEN for EAST → WEST <<<<<");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){0, 255, 0, 255});
+        } else {
+            sprintf(dir_text, "⚠️ BOTH LIGHTS RED - Waiting... ⚠️");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){255, 255, 0, 255});
+        }
+    } else if (bridge->mode == MODE_CARNAGE) {
+        if (bridge->current_direction == EAST) {
+            sprintf(dir_text, ">>>>> CARNAGE MODE: WEST → EAST ALLOWED >>>>>");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){0, 255, 0, 255});
+        } else if (bridge->current_direction == WEST) {
+            sprintf(dir_text, "<<<<< CARNAGE MODE: EAST → WEST ALLOWED <<<<<");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){0, 255, 0, 255});
+        } else {
+            sprintf(dir_text, "⚠️ CARNAGE MODE: WAITING FOR DIRECTION ⚠️");
+            draw_text_colored(dir_text, start_x + bridge->length * segment_width / 2 - 150,
+                            bridge_y - 30, (SDL_Color){255, 255, 0, 255});
         }
     }
 }
-
-
 
 void draw_legend()
 {
@@ -405,7 +665,6 @@ void draw_legend()
 
     draw_title("LEGEND", legend_x, legend_y);
     y_offset += line_height + 5;
-
 
     SDL_Rect color_box = {legend_x, legend_y + y_offset, 15, 15};
 
@@ -424,97 +683,15 @@ void draw_legend()
     draw_text("Ambulance", legend_x + 20, legend_y + y_offset);
     y_offset += line_height;
 
-    SDL_SetRenderDrawColor(renderer, 255, 100, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 60, 120, 60, 255);
     SDL_RenderFillRect(renderer, &color_box);
-    draw_text("Active Police", legend_x + 20, legend_y + y_offset);
+    draw_text("Allowed Direction", legend_x + 20, legend_y + y_offset);
     y_offset += line_height;
 
-    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+    SDL_SetRenderDrawColor(renderer, 100, 80, 80, 255);
     SDL_RenderFillRect(renderer, &color_box);
-    draw_text("Inactive Police", legend_x + 20, legend_y + y_offset);
+    draw_text("Blocked Direction", legend_x + 20, legend_y + y_offset);
 }
-
-
-void draw_traffic_lights(Bridge* bridge)
-{
-    int start_x = 350;
-    int segment_width = 15;
-    int west_light_x = start_x - 40;
-    int east_light_x = start_x + bridge->length * segment_width + 20;
-    int y = 210;
-
-    // Semáforo WEST (controla vehículos que van hacia EAST)
-    SDL_Rect west_light = {west_light_x, y, 20, 20};
-    // Semáforo EAST (controla vehículos que van hacia WEST)
-    SDL_Rect east_light = {east_light_x, y, 20, 20};
-
-    // Verificar el estado real de cada semáforo independiente
-    int west_light_green = 0;
-    int east_light_green = 0;
-
-    pthread_mutex_lock(&bridge->west_light_mutex);
-    west_light_green = (bridge->west_light_state == 1);
-    pthread_mutex_unlock(&bridge->west_light_mutex);
-
-    pthread_mutex_lock(&bridge->east_light_mutex);
-    east_light_green = (bridge->east_light_state == 1);
-    pthread_mutex_unlock(&bridge->east_light_mutex);
-
-    // Dibujar semáforo WEST
-    if (west_light_green) {
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);  // Verde
-        SDL_RenderFillRect(renderer, &west_light);
-        // Añadir brillo alrededor cuando está verde
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
-        for (int i = 0; i < 3; i++) {
-            SDL_Rect glow = {west_light_x - i, y - i, 20 + i*2, 20 + i*2};
-            SDL_RenderDrawRect(renderer, &glow);
-        }
-    } else {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Rojo
-        SDL_RenderFillRect(renderer, &west_light);
-    }
-
-    // Dibujar semáforo EAST
-    if (east_light_green) {
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);  // Verde
-        SDL_RenderFillRect(renderer, &east_light);
-        // Añadir brillo alrededor cuando está verde
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100);
-        for (int i = 0; i < 3; i++) {
-            SDL_Rect glow = {east_light_x - i, y - i, 20 + i*2, 20 + i*2};
-            SDL_RenderDrawRect(renderer, &glow);
-        }
-    } else {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Rojo
-        SDL_RenderFillRect(renderer, &east_light);
-    }
-
-    // Dibujar bordes blancos
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawRect(renderer, &west_light);
-    SDL_RenderDrawRect(renderer, &east_light);
-
-    // Etiquetas
-    draw_text("WEST LIGHT", west_light_x - 10, y - 25);
-    draw_text("(to EAST)", west_light_x - 5, y - 15);
-    draw_text("EAST LIGHT", east_light_x + 5, y - 25);
-    draw_text("(to WEST)", east_light_x + 10, y - 15);
-
-    // Mostrar tiempos de verde si están en verde
-    if (west_light_green) {
-        char time_text[50];
-        sprintf(time_text, "%d sec", bridge->west_green_time);
-        draw_text(time_text, west_light_x + 2, y + 25);
-    }
-    if (east_light_green) {
-        char time_text[50];
-        sprintf(time_text, "%d sec", bridge->east_green_time);
-        draw_text(time_text, east_light_x + 2, y + 25);
-    }
-}
-
-
 
 void gui_render(Bridge* bridge, Config* config)
 {
@@ -526,23 +703,18 @@ void gui_render(Bridge* bridge, Config* config)
     draw_waiting_queues(bridge);
     draw_legend();
 
-    // Mostrar diferentes elementos según el modo
+    // Mostrar UI específica según el modo
     if (bridge->mode == MODE_SEMAFOROS) {
-        draw_traffic_lights(bridge);  // Ahora muestra semáforos independientes
+        draw_traffic_lights_ui(bridge);
     } else if (bridge->mode == MODE_POLICE) {
         draw_police_ui(bridge);
     } else if (bridge->mode == MODE_CARNAGE) {
-        int carnage_x = 1100;
-        int carnage_y = 200;
-        draw_title("CARNAGE MODE", carnage_x, carnage_y);
-        draw_text("One direction at a time", carnage_x, carnage_y + 30);
+        draw_carnage_ui(bridge);
     }
 
     draw_title("BRIDGE TRAFFIC SIMULATION", 500, 20);
     SDL_RenderPresent(renderer);
 }
-
-
 
 void* gui_run(Bridge* bridge, Config* config)
 {
@@ -564,8 +736,6 @@ void* gui_run(Bridge* bridge, Config* config)
     gui_destroy();
     return NULL;
 }
-
-
 
 void gui_destroy()
 {

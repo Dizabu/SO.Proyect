@@ -22,13 +22,8 @@ void* gui_thread_wrapper(void* arg) {
 
 int main() {
 
-    printf("DEBUG: Starting simulation\n");
 
     srand(time(NULL));
-    printf("DEBUG: Random seed initialized\n");
-
-
-
     Config config;
 
     if (load_config("config.txt", &config) != 0) {
@@ -36,16 +31,9 @@ int main() {
         return 1;
     }
 
-    printf("DEBUG: Configuration loaded\n");
-
-
-
     Bridge bridge;
 
     bridge_init(&bridge, config.bridge_length);
-
-    printf("DEBUG: Bridge initialized with length = %d meters\n", bridge.length);
-
     bridge.mode = config.mode;
 
     bridge.cars_passed_in_turn = 0;
@@ -57,18 +45,16 @@ int main() {
 
     bridge.light_direction = EAST;
 
-    printf("DEBUG: Simulation mode = %d\n", bridge.mode);
     bridge.cars_passed_in_turn = 0;
     bridge.current_turn_max = config.east.Ki;
-    printf("DEBUG: East green = %d | West green = %d\n",
-           bridge.east_green_time, bridge.west_green_time);
 
 
 
-    pthread_t light_thread;
 
+    // ========== INICIAR HILOS SEGÚN EL MODO ==========
+
+    // Modo SEMAFOROS: dos semáforos independientes
     if (bridge.mode == MODE_SEMAFOROS) {
-        // Crear hilos independientes para cada semáforo
         pthread_t east_light_thread;
         pthread_t west_light_thread;
 
@@ -80,10 +66,21 @@ int main() {
         printf("   WEST green time: %d seconds\n", bridge.west_green_time);
     }
 
+    // Modo POLICE: dos policías independientes
+    else if (bridge.mode == MODE_POLICE) {
+        pthread_t police_east_thread;
+        pthread_t police_west_thread;
 
+        pthread_create(&police_east_thread, NULL, police_east_run, &bridge);
+        pthread_create(&police_west_thread, NULL, police_west_run, &bridge);
+
+        printf("DEBUG: Two independent police officers started (EAST and WEST)\n");
+        printf("   EAST police: %d vehicles per turn\n", bridge.east_Ki);
+        printf("   WEST police: %d vehicles per turn\n", bridge.west_Ki);
+        printf("   Timeout: 10 seconds for opposite direction\n");
+    }
 
     pthread_t gui_thread;
-
 
     GuiThreadArgs gui_args;
     gui_args.bridge = &bridge;
@@ -93,10 +90,6 @@ int main() {
         printf("ERROR: Could not start GUI thread\n");
         return 1;
     }
-
-    printf("DEBUG: GUI started with configuration\n");
-
-
 
     GeneratorArgs east_args;
     east_args.dir = EAST;
@@ -115,17 +108,13 @@ int main() {
     pthread_create(&east_thread, NULL, traffic_generator, &east_args);
     pthread_create(&west_thread, NULL, traffic_generator, &west_args);
 
-    printf("DEBUG: Both generators are now running\n");
-
 
     pthread_join(east_thread, NULL);
     pthread_join(west_thread, NULL);
 
-    printf("DEBUG: Generators finished\n");
 
     pthread_join(gui_thread, NULL);
 
-    printf("DEBUG: Simulation finished\n");
 
     return 0;
 }
