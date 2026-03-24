@@ -73,39 +73,74 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
             continue;
         }
 
-        // ========== MODO SEMAFOROS (SIMPLIFICADO) ==========
+        // ========== MODO SEMAFOROS CON PRIORIDAD DE AMBULANCIAS ==========
         if (bridge->mode == MODE_SEMAFOROS) {
 
             // Verificar el estado del semáforo correspondiente
             int light_is_green = 0;
+            int hay_ambulancias_esperando = 0;
 
             if (v->dir == EAST) {
                 // Vehículo va hacia EAST (viene de WEST) - espera semáforo WEST
                 pthread_mutex_lock(&bridge->west_light_mutex);
                 light_is_green = (bridge->west_light_state == 1);
                 pthread_mutex_unlock(&bridge->west_light_mutex);
+
+                // Verificar si hay ambulancias esperando en esta dirección
+                hay_ambulancias_esperando = (bridge->waiting_ambulances_west > 0);
             } else {
                 // Vehículo va hacia WEST (viene de EAST) - espera semáforo EAST
                 pthread_mutex_lock(&bridge->east_light_mutex);
                 light_is_green = (bridge->east_light_state == 1);
                 pthread_mutex_unlock(&bridge->east_light_mutex);
+
+                // Verificar si hay ambulancias esperando en esta dirección
+                hay_ambulancias_esperando = (bridge->waiting_ambulances_east > 0);
             }
 
-            // REGLA 1: El semáforo debe estar en VERDE
+            // REGLA 1: Si el vehículo es ambulancia Y hay ambulancias esperando
+            if (v->type == VEHICLE_AMBULANCE && hay_ambulancias_esperando) {
+                // Las ambulancias pueden pasar aunque el semáforo esté en rojo
+                printf("🚨 AMBULANCE %d has PRIORITY! Passing...\n", v->id);
+
+                // Verificar que no haya vehículos en sentido contrario en el puente
+                int opposite_vehicles = 0;
+                if (v->dir == EAST) {
+                    opposite_vehicles = bridge->vehicles_from_east_on_bridge;
+                } else {
+                    opposite_vehicles = bridge->vehicles_from_west_on_bridge;
+                }
+
+                if (opposite_vehicles > 0) {
+                    printf("🚨 Ambulance %d waiting: %d vehicles in opposite direction\n", v->id, opposite_vehicles);
+                    pthread_cond_wait(&bridge->cond, &bridge->mutex);
+                    continue;
+                }
+
+                // Intentar bloquear el primer segmento
+                if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
+                    break;
+                }
+
+                pthread_cond_wait(&bridge->cond, &bridge->mutex);
+                continue;
+            }
+
+            // REGLA 2: Si el semáforo está en ROJO, esperar (solo para vehículos normales)
             if (!light_is_green) {
                 printf("🚦 Vehicle %d waiting at RED light\n", v->id);
                 pthread_cond_wait(&bridge->cond, &bridge->mutex);
                 continue;
             }
 
-            // REGLA 2: El puente debe estar completamente VACÍO
+            // REGLA 3: Si el puente tiene vehículos, esperar
             if (bridge->vehicles_on_bridge > 0) {
                 printf("🚦 Vehicle %d waiting: bridge has %d vehicles\n", v->id, bridge->vehicles_on_bridge);
                 pthread_cond_wait(&bridge->cond, &bridge->mutex);
                 continue;
             }
 
-            // REGLA 3: Intentar bloquear el primer segmento
+            // REGLA 4: Intentar bloquear el primer segmento
             if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
                 break;
             }
@@ -179,7 +214,7 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
 
     bridge->vehicles_on_bridge++;
 
-    // Actualizar contadores de dirección para los semáforos independientes
+    // Actualizar contadores de dirección
     if (v->dir == EAST) {
         bridge->vehicles_from_west_on_bridge++;
         bridge->vehicles_east++;
@@ -209,7 +244,6 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
 
     pthread_mutex_unlock(&bridge->mutex);
 }
-
 
 
 void bridge_leave(Bridge* bridge, Vehicle* v) {
