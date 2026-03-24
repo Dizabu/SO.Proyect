@@ -53,6 +53,12 @@ void bridge_init(Bridge* bridge, int length)
     bridge->west_light_state = 0;  // ROJO inicial
     bridge->vehicles_from_east_on_bridge = 0;
     bridge->vehicles_from_west_on_bridge = 0;
+
+    time_t now = time(NULL);
+    bridge->last_east_pass_time = now;
+    bridge->last_west_pass_time = now;
+
+
 }
 void bridge_enter(Bridge* bridge, Vehicle* v) {
     pthread_mutex_lock(&bridge->mutex);
@@ -73,81 +79,122 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
             continue;
         }
 
-        // ========== MODO SEMAFOROS CON PRIORIDAD DE AMBULANCIAS ==========
-        if (bridge->mode == MODE_SEMAFOROS) {
+        // ========== MODO POLICE CON TIMEOUT (10 SEGUNDOS) ==========
+        // ========== MODO POLICE CON TIMEOUT (10 SEGUNDOS) ==========
+    if (bridge->mode == MODE_POLICE) {
 
-            // Verificar el estado del semáforo correspondiente
-            int light_is_green = 0;
-            int hay_ambulancias_esperando = 0;
+        int hay_contrarios = (v->dir == EAST)
+            ? (bridge->vehicles_west > 0)
+            : (bridge->vehicles_east > 0);
 
-            if (v->dir == EAST) {
-                // Vehículo va hacia EAST (viene de WEST) - espera semáforo WEST
-                pthread_mutex_lock(&bridge->west_light_mutex);
-                light_is_green = (bridge->west_light_state == 1);
-                pthread_mutex_unlock(&bridge->west_light_mutex);
+        // Verificar si hay ambulancias esperando en la dirección contraria
+        int hay_ambulancias_contrarias = (v->dir == EAST)
+            ? (bridge->waiting_ambulances_west > 0)
+            : (bridge->waiting_ambulances_east > 0);
 
-                // Verificar si hay ambulancias esperando en esta dirección
-                hay_ambulancias_esperando = (bridge->waiting_ambulances_west > 0);
-            } else {
-                // Vehículo va hacia WEST (viene de EAST) - espera semáforo EAST
-                pthread_mutex_lock(&bridge->east_light_mutex);
-                light_is_green = (bridge->east_light_state == 1);
-                pthread_mutex_unlock(&bridge->east_light_mutex);
+        // Obtener tiempo actual
+        time_t now = time(NULL);
 
-                // Verificar si hay ambulancias esperando en esta dirección
-                hay_ambulancias_esperando = (bridge->waiting_ambulances_east > 0);
-            }
+        // Calcular tiempo desde que el OTRO LADO pasó por última vez
+        // Si v->dir == EAST, significa que el vehículo quiere ir al ESTE (viene del WEST)
+        // Entonces el "otro lado" es el EAST (vehículos que vienen del EAST y van al WEST)
+        int tiempo_sin_pasar_otro_lado;
+        if (v->dir == EAST) {
+            // Vehículo quiere ir al ESTE, el otro lado es EAST
+            tiempo_sin_pasar_otro_lado = (now - bridge->last_east_pass_time);
+        } else {
+            // Vehículo quiere ir al OESTE, el otro lado es WEST
+            tiempo_sin_pasar_otro_lado = (now - bridge->last_west_pass_time);
+        }
 
-            // REGLA 1: Si el vehículo es ambulancia Y hay ambulancias esperando
-            if (v->type == VEHICLE_AMBULANCE && hay_ambulancias_esperando) {
-                // Las ambulancias pueden pasar aunque el semáforo esté en rojo
-                printf("🚨 AMBULANCE %d has PRIORITY! Passing...\n", v->id);
+        // TIMEOUT FIJO DE 10 SEGUNDOS
+        int timeout_activado = (tiempo_sin_pasar_otro_lado >= 10);
 
-                // Verificar que no haya vehículos en sentido contrario en el puente
-                int opposite_vehicles = 0;
-                if (v->dir == EAST) {
-                    opposite_vehicles = bridge->vehicles_from_east_on_bridge;
-                } else {
-                    opposite_vehicles = bridge->vehicles_from_west_on_bridge;
-                }
+        // Debug: imprimir cada 5 segundos aproximadamente
+        static time_t last_debug = 0;
+        if (now - last_debug >= 5) {
+            last_debug = now;
+            printf("🔍 DEBUG: last_east=%ld, last_west=%ld, now=%ld, diff_east=%ld, diff_west=%ld\n",
+                   bridge->last_east_pass_time, bridge->last_west_pass_time, now,
+                   now - bridge->last_east_pass_time, now - bridge->last_west_pass_time);
+        }
 
-                if (opposite_vehicles > 0) {
-                    printf("🚨 Ambulance %d waiting: %d vehicles in opposite direction\n", v->id, opposite_vehicles);
-                    pthread_cond_wait(&bridge->cond, &bridge->mutex);
-                    continue;
-                }
+        if (timeout_activado && hay_ambulancias_contrarias) {
+            printf("⏰ TIMEOUT! %d seconds without %s vehicles, allowing vehicles\n",
+                   tiempo_sin_pasar_otro_lado,
+                   (v->dir == EAST) ? "EAST" : "WEST");
+        }
 
-                // Intentar bloquear el primer segmento
+        // REGLA PARA AMBULANCIAS
+        if (v->type == VEHICLE_AMBULANCE) {
+            // Ambulancias pueden pasar si no hay vehículos en sentido contrario
+            // o si el timeout está activado
+            if ((bridge->vehicles_on_bridge == 0 ||
+                 bridge->current_direction == v->dir) &&
+                (!hay_contrarios || timeout_activado)) {
                 if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
+                    // Actualizar tiempo de último paso para ESTE lado
+                    if (v->dir == EAST) {
+                        bridge->last_west_pass_time = now;
+                        printf("🚨 AMBULANCE %d passing from WEST (updated last_west_pass_time to %ld)\n",
+                               v->id, now);
+                    } else {
+                        bridge->last_east_pass_time = now;
+                        printf("🚨 AMBULANCE %d passing from EAST (updated last_east_pass_time to %ld)\n",
+                               v->id, now);
+                    }
                     break;
                 }
-
-                pthread_cond_wait(&bridge->cond, &bridge->mutex);
-                continue;
             }
-
-            // REGLA 2: Si el semáforo está en ROJO, esperar (solo para vehículos normales)
-            if (!light_is_green) {
-                printf("🚦 Vehicle %d waiting at RED light\n", v->id);
-                pthread_cond_wait(&bridge->cond, &bridge->mutex);
-                continue;
-            }
-
-            // REGLA 3: Si el puente tiene vehículos, esperar
-            if (bridge->vehicles_on_bridge > 0) {
-                printf("🚦 Vehicle %d waiting: bridge has %d vehicles\n", v->id, bridge->vehicles_on_bridge);
-                pthread_cond_wait(&bridge->cond, &bridge->mutex);
-                continue;
-            }
-
-            // REGLA 4: Intentar bloquear el primer segmento
-            if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
-                break;
-            }
-
             pthread_cond_wait(&bridge->cond, &bridge->mutex);
             continue;
         }
+
+        // REGLA PARA VEHÍCULOS NORMALES
+        // Si hay ambulancias esperando en sentido contrario, verificar timeout
+        if (hay_ambulancias_contrarias && !timeout_activado) {
+            printf("🚗 Vehicle %d waiting: ambulances in opposite direction (timeout in %d sec)\n",
+                   v->id, 10 - tiempo_sin_pasar_otro_lado);
+            pthread_cond_wait(&bridge->cond, &bridge->mutex);
+            continue;
+        }
+
+        // Verificar dirección del semáforo policía
+        if (v->dir != bridge->light_direction) {
+            pthread_cond_wait(&bridge->cond, &bridge->mutex);
+            continue;
+        }
+
+        // Verificar límite de vehículos por turno
+        if (bridge->cars_passed_in_turn >= bridge->current_turn_max) {
+            pthread_cond_wait(&bridge->cond, &bridge->mutex);
+            continue;
+        }
+
+        // Verificar vehículos en sentido contrario
+        if (hay_contrarios) {
+            pthread_cond_wait(&bridge->cond, &bridge->mutex);
+            continue;
+        }
+
+        // Intentar entrar
+        if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
+            bridge->cars_passed_in_turn++;
+            // Actualizar tiempo de último paso para ESTE lado
+            if (v->dir == EAST) {
+                bridge->last_west_pass_time = now;
+                printf("🚗 Vehicle %d passing from WEST (updated last_west_pass_time to %ld)\n", v->id, now);
+            } else {
+                bridge->last_east_pass_time = now;
+                printf("🚗 Vehicle %d passing from EAST (updated last_east_pass_time to %ld)\n", v->id, now);
+            }
+            break;
+        }
+
+        pthread_cond_wait(&bridge->cond, &bridge->mutex);
+        continue;
+    }
+
 
         // ========== MODO CARNAGE (sin cambios) ==========
         if (bridge->mode == MODE_CARNAGE) {
@@ -165,41 +212,63 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
             continue;
         }
 
-        // ========== MODO POLICE (sin cambios) ==========
-        if (bridge->mode == MODE_POLICE) {
+        // ========== MODO SEMAFOROS (sin cambios) ==========
+        if (bridge->mode == MODE_SEMAFOROS) {
 
-            int hay_contrarios = (v->dir == EAST)
-                ? (bridge->vehicles_west > 0)
-                : (bridge->vehicles_east > 0);
+            int light_is_green = 0;
+            int hay_ambulancias_esperando = 0;
 
-            if (v->type == VEHICLE_AMBULANCE) {
+            if (v->dir == EAST) {
+                pthread_mutex_lock(&bridge->west_light_mutex);
+                light_is_green = (bridge->west_light_state == 1);
+                pthread_mutex_unlock(&bridge->west_light_mutex);
+                hay_ambulancias_esperando = (bridge->waiting_ambulances_west > 0);
+            } else {
+                pthread_mutex_lock(&bridge->east_light_mutex);
+                light_is_green = (bridge->east_light_state == 1);
+                pthread_mutex_unlock(&bridge->east_light_mutex);
+                hay_ambulancias_esperando = (bridge->waiting_ambulances_east > 0);
+            }
 
-                if ((bridge->vehicles_on_bridge == 0 ||
-                     bridge->current_direction == v->dir) && !hay_contrarios) {
-                    if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0)
-                        break;
-                     }
+            if (v->type == VEHICLE_AMBULANCE && hay_ambulancias_esperando) {
+                int opposite_vehicles = 0;
+                if (v->dir == EAST) {
+                    opposite_vehicles = bridge->vehicles_from_east_on_bridge;
+                } else {
+                    opposite_vehicles = bridge->vehicles_from_west_on_bridge;
+                }
+
+                if (opposite_vehicles > 0) {
+                    pthread_cond_wait(&bridge->cond, &bridge->mutex);
+                    continue;
+                }
+
+                if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
+                    break;
+                }
+
                 pthread_cond_wait(&bridge->cond, &bridge->mutex);
                 continue;
             }
 
-            if (v->dir != bridge->light_direction) {
+            if (!light_is_green) {
                 pthread_cond_wait(&bridge->cond, &bridge->mutex);
                 continue;
             }
 
-            if (bridge->cars_passed_in_turn >= bridge->current_turn_max) {
-                pthread_cond_wait(&bridge->cond, &bridge->mutex);
-                continue;
+            int opposite_vehicles = 0;
+            if (v->dir == EAST) {
+                opposite_vehicles = bridge->vehicles_from_east_on_bridge;
+            } else {
+                opposite_vehicles = bridge->vehicles_from_west_on_bridge;
             }
 
-            if (hay_contrarios) {
+            if (opposite_vehicles > 0) {
                 pthread_cond_wait(&bridge->cond, &bridge->mutex);
                 continue;
             }
 
             if (pthread_mutex_trylock(&bridge->segment_mutexes[first_segment]) == 0) {
-                bridge->cars_passed_in_turn++;
                 break;
             }
 
@@ -214,7 +283,6 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
 
     bridge->vehicles_on_bridge++;
 
-    // Actualizar contadores de dirección
     if (v->dir == EAST) {
         bridge->vehicles_from_west_on_bridge++;
         bridge->vehicles_east++;
@@ -245,7 +313,6 @@ void bridge_enter(Bridge* bridge, Vehicle* v) {
     pthread_mutex_unlock(&bridge->mutex);
 }
 
-
 void bridge_leave(Bridge* bridge, Vehicle* v) {
     pthread_mutex_lock(&bridge->mutex);
 
@@ -275,6 +342,13 @@ void bridge_leave(Bridge* bridge, Vehicle* v) {
                     bridge->current_turn_max = bridge->west_Ki;
                 printf("POLICE: Switching to %s\n",
                        bridge->light_direction == EAST ? "EAST" : "WEST");
+
+                // NUEVO: Cuando cambia el turno, reiniciar los tiempos
+                time_t now = time(NULL);
+                bridge->last_east_pass_time = now;
+                bridge->last_west_pass_time = now;
+                printf("⏰ TIMEOUT counters reset after turn switch (now: %ld)\n", now);
+
                 pthread_cond_broadcast(&bridge->cond);
             }
         }
@@ -289,13 +363,13 @@ void bridge_leave(Bridge* bridge, Vehicle* v) {
     if (bridge->vehicles_on_bridge == 0) {
         bridge->current_direction = -1;
         printf("Bridge is now EMPTY\n");
-        // Notificar a los semáforos que el puente está vacío
         pthread_cond_broadcast(&bridge->cond);
     }
 
     pthread_cond_broadcast(&bridge->cond);
     pthread_mutex_unlock(&bridge->mutex);
 }
+
 
 
 // Modificar traffic_light_east_run

@@ -49,6 +49,9 @@ typedef struct Bridge {
     int vehicles_from_east_on_bridge;
     int vehicles_from_west_on_bridge;
 
+    time_t last_east_pass_time;
+    time_t last_west_pass_time;
+
 } Bridge;
 
 void bridge_init(Bridge* bridge, int length);

@@ -1,23 +1,23 @@
-    # Bridge configuration
-    bridge_length=25
-    simulation_mode=tlights
+# Bridge configuration
+bridge_length=25
+simulation_mode=police
 
-    # East → West traffic
-    east_arrival_mean=2.5
-    east_avg_speed=40
-    east_Ki=3
-    east_green_time=10
-    east_min_speed=30
-    east_max_speed=50
-    east_ambulance_percentage=10
-    east_speed_variation=5
+# East → West traffic (dirección principal para saturar)
+east_arrival_mean=0.1         # ↓ MUY BAJO = autos muy frecuentes (rápidamente)
+east_avg_speed=15              # ↓ LENTOS (15 km/h)
+east_Ki=3
+east_green_time=15             # ↑ Más tiempo verde para que pasen muchos
+east_min_speed=10              # Límite inferior lento
+east_max_speed=20              # Límite superior lento
+east_ambulance_percentage=0    # Sin ambulancias para mantener lentitud
+east_speed_variation=3         # Poca variación para que sean consistentemente lentos
 
-    # West → East traffic
-    west_arrival_mean=3.0
-    west_avg_speed=35
-    west_Ki=2
-    west_green_time=12
-    west_min_speed=25
-    west_max_speed=45
-    west_ambulance_percentage=100
-    west_speed_variation=5
+# West → East traffic (tráfico ligero opuesto)
+west_arrival_mean=11.0          # ↑ ALTO = pocos autos (para no interferir)
+west_avg_speed=40              # Rápidos pero casi no salen
+west_Ki=2
+west_green_time=8              # Menos tiempo verde
+west_min_speed=35
+west_max_speed=45
+west_ambulance_percentage=100
+west_speed_variation=5
